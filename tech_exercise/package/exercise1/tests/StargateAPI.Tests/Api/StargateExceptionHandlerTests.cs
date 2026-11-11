@@ -1,5 +1,3 @@
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Exceptions;
 using StargateAPI.Business.Responses;
 using StargateAPI.Infrastructure;
@@ -39,15 +37,12 @@ public class StargateExceptionHandlerTests
     }
 
     [Fact]
-    public void DatabaseConstraintViolation_FromARace_Maps_To409()
+    public void CancelledRequest_Maps_To499()
     {
-        var exception = new DbUpdateException("save failed",
-            new SqliteException("UNIQUE constraint failed: Person.Name", 19));
+        var response = StargateExceptionHandler.ToResponse(new OperationCanceledException());
 
-        var response = StargateExceptionHandler.ToResponse(exception);
-
-        Assert.Equal(409, response.ResponseCode);
-        Assert.DoesNotContain("Person.Name", response.Message);
+        Assert.Equal(499, response.ResponseCode);
+        Assert.Equal("The request was cancelled.", response.Message);
     }
 
     [Fact]

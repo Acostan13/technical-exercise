@@ -133,6 +133,14 @@ public class ApiEndpointTests : IDisposable
     }
 
     [Fact]
+    public async Task UnconvertibleQueryValue_Returns400_NamingTheParameter()
+    {
+        var response = await _client.GetAsync("/ProcessLog?take=abc");
+
+        await AssertErrorAsync(response, HttpStatusCode.BadRequest, "'take' has an invalid value.");
+    }
+
+    [Fact]
     public async Task ProcessLog_WithAnInvalidTake_Returns400()
     {
         var response = await _client.GetAsync("/ProcessLog?take=0");

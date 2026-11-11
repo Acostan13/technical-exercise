@@ -22,7 +22,7 @@ namespace StargateAPI.Infrastructure
 
             var errors = context.ModelState
                 .Where(entry => entry.Value is { Errors.Count: > 0 })
-                .SelectMany(entry => Describe(entry.Key, entry.Value!, bodyParameters))
+                .SelectMany(entry => Describe(entry.Key, bodyParameters))
                 .Distinct()
                 .ToList();
 
@@ -41,7 +41,7 @@ namespace StargateAPI.Infrastructure
             });
         }
 
-        private static IEnumerable<string> Describe(string key, ModelStateEntry entry, ISet<string> bodyParameters)
+        private static IEnumerable<string> Describe(string key, ISet<string> bodyParameters)
         {
             // The body as a whole could not be read (empty, truncated or not JSON).
             if (string.IsNullOrEmpty(key) || key == "$" || bodyParameters.Contains(key))
@@ -55,9 +55,8 @@ namespace StargateAPI.Infrastructure
                 return new[] { $"'{key[2..]}' has an invalid value." };
             }
 
-            // Route or query values.
-            return entry.Errors.Select(error =>
-                string.IsNullOrWhiteSpace(error.ErrorMessage) ? $"The value for '{key}' is invalid." : error.ErrorMessage);
+            // Route or query values, e.g. "take".
+            return new[] { $"'{key}' has an invalid value." };
         }
     }
 }

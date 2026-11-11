@@ -6,7 +6,7 @@ namespace StargateAPI.Business.Exceptions
     /// </summary>
     public abstract class StargateException : Exception
     {
-        protected StargateException(string message) : base(message)
+        protected StargateException(string message, Exception? innerException = null) : base(message, innerException)
         {
         }
     }
@@ -24,7 +24,7 @@ namespace StargateAPI.Business.Exceptions
     /// <summary>The request conflicts with existing data (for example, a duplicate).</summary>
     public sealed class ConflictException : StargateException
     {
-        public ConflictException(string message) : base(message)
+        public ConflictException(string message, Exception? innerException = null) : base(message, innerException)
         {
         }
     }

@@ -70,10 +70,21 @@ namespace StargateAPI.Business.Commands
                     $"'{request.Name}' already has a '{request.DutyTitle}' duty starting {dutyStartDate:yyyy-MM-dd}.");
             }
 
-            // The previous duty ends the day before the new one starts, so the new duty must start
-            // after the current one. Otherwise the previous duty would end before it began.
-            var latestDutyStartDate = await _context.AstronautDuties.AsNoTracking()
-                .Where(z => z.PersonId == person.Id)
+            await DutyHistory.EnsureStartsAfterLatestDutyAsync(_context, person.Id, dutyStartDate, cancellationToken);
+        }
+    }
+
+    internal static class DutyHistory
+    {
+        /// <summary>
+        /// The previous duty ends the day before the new one starts, so a new duty must start after the
+        /// Person's latest duty. Otherwise the previous duty would end before it began.
+        /// </summary>
+        public static async Task EnsureStartsAfterLatestDutyAsync(
+            StargateContext context, int personId, DateTime dutyStartDate, CancellationToken cancellationToken)
+        {
+            var latestDutyStartDate = await context.AstronautDuties.AsNoTracking()
+                .Where(z => z.PersonId == personId)
                 .OrderByDescending(z => z.DutyStartDate)
                 .Select(z => (DateTime?)z.DutyStartDate)
                 .FirstOrDefaultAsync(cancellationToken);
@@ -110,6 +121,10 @@ namespace StargateAPI.Business.Commands
             // Closing the previous duty and opening the new one happen in one transaction; they are saved
             // in two steps so the "one current duty per person" index is never violated mid-statement.
             await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
+
+            // Re-checked inside the transaction (SQLite BEGIN IMMEDIATE: holds the write lock). The pre-processor
+            // check runs before the lock is taken, so a concurrent request may have added a later duty since.
+            await DutyHistory.EnsureStartsAfterLatestDutyAsync(_context, person.Id, dutyStartDate, cancellationToken);
 
             var currentDuty = await _context.AstronautDuties
                 .Where(z => z.PersonId == person.Id && z.DutyEndDate == null)

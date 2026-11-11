@@ -1,6 +1,4 @@
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Exceptions;
 using StargateAPI.Business.Responses;
 
@@ -12,8 +10,6 @@ namespace StargateAPI.Infrastructure
     /// </summary>
     public sealed class StargateExceptionHandler : IExceptionHandler
     {
-        private const int SqliteConstraintErrorCode = 19;
-
         private readonly ILogger<StargateExceptionHandler> _logger;
 
         public StargateExceptionHandler(ILogger<StargateExceptionHandler> logger)
@@ -52,11 +48,6 @@ namespace StargateAPI.Infrastructure
             },
             NotFoundException notFound => Failure(StatusCodes.Status404NotFound, notFound.Message),
             ConflictException conflict => Failure(StatusCodes.Status409Conflict, conflict.Message),
-
-            // A concurrent request can pass the pre-processor checks and then hit a database constraint
-            // (e.g. two requests creating the same Person at once). That is a conflict, not a server fault.
-            DbUpdateException { InnerException: SqliteException { SqliteErrorCode: SqliteConstraintErrorCode } } =>
-                Failure(StatusCodes.Status409Conflict, "The request conflicts with existing data. Refresh and try again."),
 
             OperationCanceledException => Failure(499, "The request was cancelled."),
 

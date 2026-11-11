@@ -9,26 +9,55 @@ using StargateAPI.Business.Data;
 namespace StargateAPI.Tests.Infrastructure;
 
 /// <summary>
-/// Hosts the real application (routing, model binding, exception handling, MediatR, EF Core) in memory,
-/// with the database swapped for an isolated in-memory SQLite instance.
+/// Hosts the real application (routing, model binding, exception handling, MediatR, EF Core) in memory.
+/// By default the database is an isolated in-memory SQLite instance on one shared connection. Tests that
+/// issue concurrent requests must use <see cref="WithFileDatabase"/>, because a single SqliteConnection
+/// is not thread-safe, whereas a file lets each request open its own connection, exactly as in production.
 /// </summary>
 public sealed class StargateApiFactory : WebApplicationFactory<Program>
 {
-    private readonly SqliteConnection _connection = new("DataSource=:memory:");
+    private readonly string _environment;
+    private readonly string? _databasePath;
+    private readonly SqliteConnection? _connection;
 
-    public StargateApiFactory()
+    public StargateApiFactory(string environment = "Testing")
+        : this(environment, databasePath: null)
     {
-        _connection.Open();
     }
+
+    private StargateApiFactory(string environment, string? databasePath)
+    {
+        _environment = environment;
+        _databasePath = databasePath;
+
+        if (databasePath is null)
+        {
+            _connection = new SqliteConnection("DataSource=:memory:");
+            _connection.Open();
+        }
+    }
+
+    public static StargateApiFactory WithFileDatabase() =>
+        new("Testing", Path.Combine(Path.GetTempPath(), $"stargate-tests-{Guid.NewGuid():N}.db"));
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
-        builder.UseEnvironment("Testing");
+        builder.UseEnvironment(_environment);
 
         builder.ConfigureServices(services =>
         {
             services.RemoveAll<DbContextOptions<StargateContext>>();
-            services.AddDbContext<StargateContext>(options => options.UseSqlite(_connection));
+            services.AddDbContext<StargateContext>(options =>
+            {
+                if (_connection is not null)
+                {
+                    options.UseSqlite(_connection);
+                }
+                else
+                {
+                    options.UseSqlite($"Data Source={_databasePath}");
+                }
+            });
         });
     }
 
@@ -36,9 +65,17 @@ public sealed class StargateApiFactory : WebApplicationFactory<Program>
     {
         base.Dispose(disposing);
 
-        if (disposing)
+        if (!disposing)
         {
-            _connection.Dispose();
+            return;
+        }
+
+        _connection?.Dispose();
+
+        if (_databasePath is not null)
+        {
+            SqliteConnection.ClearAllPools();
+            File.Delete(_databasePath);
         }
     }
 }

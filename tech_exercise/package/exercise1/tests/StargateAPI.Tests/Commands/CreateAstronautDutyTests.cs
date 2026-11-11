@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using StargateAPI.Business.Commands;
 using StargateAPI.Business.Data;
 using StargateAPI.Business.Exceptions;
 using StargateAPI.Tests.Infrastructure;
@@ -148,6 +149,33 @@ public class CreateAstronautDutyTests : IDisposable
     }
 
     [Fact]
+    public async Task Handler_RechecksDutyOrderInsideItsTransaction_WhenThePreProcessorCheckIsStale()
+    {
+        // Simulates a lost race: this request passed the pre-processor while the Person had no later duty,
+        // but a concurrent request then saved one. Calling the handler directly reproduces that state
+        // deterministically. Without the in-transaction re-check, the earlier duty would close the later
+        // one and become "current", breaking the duty history.
+        await _host.AddDutyAsync(Name, "CPT", "Pilot", SecondStart);
+
+        await using var context = _host.CreateContext();
+        var handler = new CreateAstronautDutyHandler(context);
+
+        await Assert.ThrowsAsync<RequestValidationException>(() => handler.Handle(new CreateAstronautDuty
+        {
+            Name = Name,
+            Rank = "1LT",
+            DutyTitle = "Commander",
+            DutyStartDate = FirstStart
+        }, CancellationToken.None));
+
+        var (detail, duties) = await LoadAsync();
+        var current = Assert.Single(duties);
+        Assert.Equal("Pilot", current.DutyTitle);
+        Assert.Null(current.DutyEndDate);
+        Assert.Equal("Pilot", detail!.CurrentDutyTitle);
+    }
+
+    [Fact]
     public async Task CurrentDutyRule_IsAlsoEnforcedByTheDatabase()
     {
         await _host.AddDutyAsync(Name, "1LT", "Commander", FirstStart);
@@ -159,7 +187,8 @@ public class CreateAstronautDutyTests : IDisposable
             PersonId = personId, Rank = "CPT", DutyTitle = "Pilot", DutyStartDate = SecondStart
         });
 
-        await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+        var ex = await Assert.ThrowsAsync<ConflictException>(() => context.SaveChangesAsync());
+        Assert.IsType<DbUpdateException>(ex.InnerException);
     }
 
     private async Task<(AstronautDetail? Detail, List<AstronautDuty> Duties)> LoadAsync()

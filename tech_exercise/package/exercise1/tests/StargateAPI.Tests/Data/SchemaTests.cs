@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
+using StargateAPI.Business.Exceptions;
 using StargateAPI.Tests.Infrastructure;
 
 namespace StargateAPI.Tests.Data;
@@ -30,7 +31,8 @@ public class SchemaTests : IDisposable
         {
             context.People.Add(new Person { Name = "John Doe" });
 
-            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            var ex = await Assert.ThrowsAsync<ConflictException>(() => context.SaveChangesAsync());
+            Assert.IsType<DbUpdateException>(ex.InnerException);
         }
     }
 
@@ -63,7 +65,8 @@ public class SchemaTests : IDisposable
                 CareerStartDate = new DateTime(2021, 1, 1)
             });
 
-            await Assert.ThrowsAsync<DbUpdateException>(() => context.SaveChangesAsync());
+            var ex = await Assert.ThrowsAsync<ConflictException>(() => context.SaveChangesAsync());
+            Assert.IsType<DbUpdateException>(ex.InnerException);
         }
     }
 

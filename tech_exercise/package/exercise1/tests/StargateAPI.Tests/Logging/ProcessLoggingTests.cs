@@ -94,6 +94,21 @@ public class ProcessLoggingTests : IDisposable
     }
 
     [Fact]
+    public async Task UnserializableRequest_IsStillLogged_WithoutRequestData()
+    {
+        var writer = new CapturingWriter();
+        var behavior = new ProcessLoggingBehavior<UnserializableRequest, int>(
+            writer, NullLogger<ProcessLoggingBehavior<UnserializableRequest, int>>.Instance);
+
+        var result = await behavior.Handle(new UnserializableRequest(), () => Task.FromResult(42), CancellationToken.None);
+
+        Assert.Equal(42, result);
+        var log = Assert.Single(writer.Entries);
+        Assert.True(log.Succeeded);
+        Assert.Null(log.RequestData);
+    }
+
+    [Fact]
     public async Task ReadingTheProcessLog_IsNotItselfLogged_AndReturnsNewestFirst()
     {
         await _host.CreatePersonAsync("First");
@@ -159,6 +174,11 @@ public class ProcessLoggingTests : IDisposable
     {
         await using var context = _host.CreateContext();
         return await context.ProcessLogs.OrderBy(l => l.Id).ToListAsync();
+    }
+
+    private sealed class UnserializableRequest : IRequest<int>
+    {
+        public string Value => throw new InvalidOperationException("Cannot be serialized.");
     }
 
     private sealed class CapturingWriter : IProcessLogWriter
