@@ -114,6 +114,32 @@ public class ApiEndpointTests : IDisposable
         await AssertErrorAsync(response, HttpStatusCode.BadRequest, "Name is required.");
     }
 
+    [Fact]
+    public async Task ProcessLog_RecordsSuccessesAndFailures_NewestFirst()
+    {
+        await _client.PostAsJsonAsync("/Person", new { name = "John Doe" });
+        await _client.GetAsync("/Person/Nobody");
+
+        var body = await GetJsonAsync("/ProcessLog?take=10");
+
+        var logs = body.GetProperty("processLogs");
+        Assert.Equal(2, logs.GetArrayLength());
+        Assert.Equal("GetPersonByName", logs[0].GetProperty("requestName").GetString());
+        Assert.Equal("Warning", logs[0].GetProperty("level").GetString());
+        Assert.False(logs[0].GetProperty("succeeded").GetBoolean());
+        Assert.Equal("CreatePerson", logs[1].GetProperty("requestName").GetString());
+        Assert.Equal("Information", logs[1].GetProperty("level").GetString());
+        Assert.True(logs[1].GetProperty("succeeded").GetBoolean());
+    }
+
+    [Fact]
+    public async Task ProcessLog_WithAnInvalidTake_Returns400()
+    {
+        var response = await _client.GetAsync("/ProcessLog?take=0");
+
+        await AssertErrorAsync(response, HttpStatusCode.BadRequest, "Take must be between 1 and 500.");
+    }
+
     private async Task<JsonElement> GetJsonAsync(string url)
     {
         var response = await _client.GetAsync(url);

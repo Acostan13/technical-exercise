@@ -19,6 +19,7 @@ public sealed class StargateTestHost : IDisposable
     {
         var services = new ServiceCollection();
         services.AddDbContext<StargateContext>(options => options.UseSqlite(_database.Connection));
+        services.AddLogging();
         services.AddStargateBusiness();
 
         _services = services.BuildServiceProvider(new ServiceProviderOptions
@@ -35,14 +36,10 @@ public sealed class StargateTestHost : IDisposable
         return await mediator.Send(request);
     }
 
+    public IServiceProvider Services => _services;
+
     /// <summary>Creates a context outside the pipeline, for arranging and asserting on data.</summary>
     public StargateContext CreateContext() => _database.CreateContext();
-
-    public IMediator CreateScopedMediator(out IServiceScope scope)
-    {
-        scope = _services.CreateScope();
-        return scope.ServiceProvider.GetRequiredService<IMediator>();
-    }
 
     public void Dispose()
     {

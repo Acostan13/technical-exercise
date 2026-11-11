@@ -3,6 +3,7 @@ using MediatR.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using StargateAPI.Business;
 using StargateAPI.Business.Commands;
+using StargateAPI.Business.Logging;
 using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Tests.Infrastructure;
@@ -29,16 +30,21 @@ public class PipelineRegistrationTests
     }
 
     [Fact]
-    public void Validation_RunsBefore_PreProcessors()
+    public void Behaviors_RunInTheIntendedOrder()
     {
-        // MediatR executes behaviors in registration order, outermost first.
+        // MediatR executes behaviors in registration order, outermost first: logging must wrap everything so
+        // that validation and pre-processor rejections are recorded, and validation must precede the
+        // pre-processors so database rule checks only see well-formed input.
         var behaviors = _services
             .Where(d => d.ServiceType == typeof(IPipelineBehavior<,>))
             .Select(d => d.ImplementationType)
             .ToList();
 
-        Assert.True(
-            behaviors.IndexOf(typeof(ValidationBehavior<,>)) < behaviors.IndexOf(typeof(RequestPreProcessorBehavior<,>)),
-            "ValidationBehavior must be registered before RequestPreProcessorBehavior.");
+        Assert.Equal(new[]
+        {
+            typeof(ProcessLoggingBehavior<,>),
+            typeof(ValidationBehavior<,>),
+            typeof(RequestPreProcessorBehavior<,>)
+        }, behaviors);
     }
 }

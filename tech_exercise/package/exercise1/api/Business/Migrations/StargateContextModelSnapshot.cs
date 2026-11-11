@@ -102,6 +102,51 @@ namespace StargateAPI.Migrations
                     b.ToTable("Person");
                 });
 
+            modelBuilder.Entity("StargateAPI.Business.Data.ProcessLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ExceptionDetail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExceptionType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestData")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("TimestampUtc")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TimestampUtc");
+
+                    b.ToTable("ProcessLog");
+                });
+
             modelBuilder.Entity("StargateAPI.Business.Data.AstronautDetail", b =>
                 {
                     b.HasOne("StargateAPI.Business.Data.Person", "Person")
