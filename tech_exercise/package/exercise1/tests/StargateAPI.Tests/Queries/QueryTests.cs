@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Http;
+using StargateAPI.Business.Exceptions;
 using StargateAPI.Business.Queries;
 using StargateAPI.Tests.Infrastructure;
 
@@ -45,10 +45,8 @@ public class QueryTests : IDisposable
     [Fact]
     public async Task GetPersonByName_WhenNotFound_IsRejectedAsNotFound()
     {
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<NotFoundException>(
             () => _host.SendAsync(new GetPersonByName { Name = "Nobody" }));
-
-        Assert.Equal(StatusCodes.Status404NotFound, ex.StatusCode);
     }
 
     [Fact]
@@ -62,7 +60,7 @@ public class QueryTests : IDisposable
         var obrien = await _host.SendAsync(new GetPersonByName { Name = "Miles O'Brien" });
         Assert.Equal("Miles O'Brien", obrien.Person!.Name);
 
-        await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<NotFoundException>(
             () => _host.SendAsync(new GetPersonByName { Name = "x' OR '1'='1" }));
     }
 
@@ -96,10 +94,8 @@ public class QueryTests : IDisposable
     public async Task GetAstronautDutiesByName_WhenNotFound_IsRejectedAsNotFound()
     {
         // Previously this dereferenced a null person and failed with a NullReferenceException.
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<NotFoundException>(
             () => _host.SendAsync(new GetAstronautDutiesByName { Name = "Nobody" }));
-
-        Assert.Equal(StatusCodes.Status404NotFound, ex.StatusCode);
     }
 
     public void Dispose() => _host.Dispose();

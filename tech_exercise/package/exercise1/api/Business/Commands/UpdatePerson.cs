@@ -1,8 +1,11 @@
+using FluentValidation;
 using MediatR;
 using MediatR.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Commands
 {
@@ -12,9 +15,21 @@ namespace StargateAPI.Business.Commands
     /// </summary>
     public class UpdatePerson : IRequest<UpdatePersonResult>
     {
-        public required string CurrentName { get; set; } = string.Empty;
+        private string _currentName = string.Empty;
+        private string _name = string.Empty;
 
-        public required string Name { get; set; } = string.Empty;
+        public required string CurrentName { get => _currentName; set => _currentName = Normalize.Text(value); }
+
+        public required string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class UpdatePersonValidator : AbstractValidator<UpdatePerson>
+    {
+        public UpdatePersonValidator()
+        {
+            RuleFor(x => x.CurrentName).NotEmpty().WithMessage("The name of the person to update is required.");
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class UpdatePersonPreProcessor : IRequestPreProcessor<UpdatePerson>
@@ -29,21 +44,15 @@ namespace StargateAPI.Business.Commands
         public async Task Process(UpdatePerson request, CancellationToken cancellationToken)
         {
             var person = await _context.People.AsNoTracking()
-                .FirstOrDefaultAsync(z => z.Name == request.CurrentName, cancellationToken);
-
-            if (person is null)
-            {
-                throw new BadHttpRequestException(
-                    $"No person named '{request.CurrentName}' was found.", StatusCodes.Status404NotFound);
-            }
+                .FirstOrDefaultAsync(z => z.Name == request.CurrentName, cancellationToken)
+                ?? throw NotFoundException.Person(request.CurrentName);
 
             var nameTakenByAnother = await _context.People
                 .AnyAsync(z => z.Name == request.Name && z.Id != person.Id, cancellationToken);
 
             if (nameTakenByAnother)
             {
-                throw new BadHttpRequestException(
-                    $"A person named '{request.Name}' already exists.", StatusCodes.Status409Conflict);
+                throw new ConflictException($"A person named '{request.Name}' already exists.");
             }
         }
     }
@@ -61,8 +70,7 @@ namespace StargateAPI.Business.Commands
         {
             var person = await _context.People
                 .FirstOrDefaultAsync(z => z.Name == request.CurrentName, cancellationToken)
-                ?? throw new BadHttpRequestException(
-                    $"No person named '{request.CurrentName}' was found.", StatusCodes.Status404NotFound);
+                ?? throw NotFoundException.Person(request.CurrentName);
 
             person.Name = request.Name;
 

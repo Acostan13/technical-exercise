@@ -1,21 +1,41 @@
-﻿using MediatR;
+﻿using FluentValidation;
+using MediatR;
 using MediatR.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
 using StargateAPI.Business.Rules;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Commands
 {
     public class CreateAstronautDuty : IRequest<CreateAstronautDutyResult>
     {
-        public required string Name { get; set; }
+        private string _name = string.Empty;
+        private string _rank = string.Empty;
+        private string _dutyTitle = string.Empty;
 
-        public required string Rank { get; set; }
+        public string Name { get => _name; set => _name = Normalize.Text(value); }
 
-        public required string DutyTitle { get; set; }
+        public string Rank { get => _rank; set => _rank = Normalize.Text(value); }
+
+        public string DutyTitle { get => _dutyTitle; set => _dutyTitle = Normalize.Text(value); }
 
         public DateTime DutyStartDate { get; set; }
+    }
+
+    public class CreateAstronautDutyValidator : AbstractValidator<CreateAstronautDuty>
+    {
+        public CreateAstronautDutyValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+            RuleFor(x => x.Rank).ValidRank();
+            RuleFor(x => x.DutyTitle).ValidDutyTitle();
+
+            // An omitted date deserializes to DateTime.MinValue; reject it rather than store 0001-01-01.
+            RuleFor(x => x.DutyStartDate).NotEqual(default(DateTime)).WithMessage("Duty Start Date is required.");
+        }
     }
 
     /// <summary>
@@ -33,13 +53,8 @@ namespace StargateAPI.Business.Commands
         public async Task Process(CreateAstronautDuty request, CancellationToken cancellationToken)
         {
             var person = await _context.People.AsNoTracking()
-                .FirstOrDefaultAsync(z => z.Name == request.Name, cancellationToken);
-
-            if (person is null)
-            {
-                throw new BadHttpRequestException(
-                    $"No person named '{request.Name}' was found.", StatusCodes.Status404NotFound);
-            }
+                .FirstOrDefaultAsync(z => z.Name == request.Name, cancellationToken)
+                ?? throw NotFoundException.Person(request.Name);
 
             var dutyStartDate = request.DutyStartDate.Date;
 
@@ -51,9 +66,8 @@ namespace StargateAPI.Business.Commands
 
             if (isDuplicate)
             {
-                throw new BadHttpRequestException(
-                    $"'{request.Name}' already has a '{request.DutyTitle}' duty starting {dutyStartDate:yyyy-MM-dd}.",
-                    StatusCodes.Status409Conflict);
+                throw new ConflictException(
+                    $"'{request.Name}' already has a '{request.DutyTitle}' duty starting {dutyStartDate:yyyy-MM-dd}.");
             }
 
             // The previous duty ends the day before the new one starts, so the new duty must start
@@ -66,9 +80,8 @@ namespace StargateAPI.Business.Commands
 
             if (latestDutyStartDate is not null && dutyStartDate <= latestDutyStartDate.Value)
             {
-                throw new BadHttpRequestException(
-                    $"The duty start date must be after the current duty start date ({latestDutyStartDate:yyyy-MM-dd}).",
-                    StatusCodes.Status400BadRequest);
+                throw new RequestValidationException(
+                    $"Duty Start Date must be after the current duty start date ({latestDutyStartDate:yyyy-MM-dd}).");
             }
         }
     }
@@ -87,8 +100,7 @@ namespace StargateAPI.Business.Commands
             var person = await _context.People
                 .Include(z => z.AstronautDetail)
                 .FirstOrDefaultAsync(z => z.Name == request.Name, cancellationToken)
-                ?? throw new BadHttpRequestException(
-                    $"No person named '{request.Name}' was found.", StatusCodes.Status404NotFound);
+                ?? throw NotFoundException.Person(request.Name);
 
             var dutyStartDate = request.DutyStartDate.Date;
             var isRetirement = DutyTitles.IsRetired(request.DutyTitle);

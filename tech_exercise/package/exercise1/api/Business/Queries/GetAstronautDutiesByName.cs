@@ -1,14 +1,27 @@
-﻿using MediatR;
+﻿using FluentValidation;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
 using StargateAPI.Business.Dtos;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Queries
 {
     public class GetAstronautDutiesByName : IRequest<GetAstronautDutiesByNameResult>
     {
-        public required string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public required string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class GetAstronautDutiesByNameValidator : AbstractValidator<GetAstronautDutiesByName>
+    {
+        public GetAstronautDutiesByNameValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class GetAstronautDutiesByNameHandler : IRequestHandler<GetAstronautDutiesByName, GetAstronautDutiesByNameResult>
@@ -26,8 +39,7 @@ namespace StargateAPI.Business.Queries
                 .Where(z => z.Name == request.Name)
                 .Select(PersonAstronaut.Projection)
                 .FirstOrDefaultAsync(cancellationToken)
-                ?? throw new BadHttpRequestException(
-                    $"No person named '{request.Name}' was found.", StatusCodes.Status404NotFound);
+                ?? throw NotFoundException.Person(request.Name);
 
             // A Person with no astronaut assignments returns an empty list rather than an error.
             var duties = await _context.AstronautDuties.AsNoTracking()

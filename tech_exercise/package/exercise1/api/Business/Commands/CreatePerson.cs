@@ -1,14 +1,27 @@
-﻿using MediatR;
+﻿using FluentValidation;
+using MediatR;
 using MediatR.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Commands
 {
     public class CreatePerson : IRequest<CreatePersonResult>
     {
-        public required string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class CreatePersonValidator : AbstractValidator<CreatePerson>
+    {
+        public CreatePersonValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class CreatePersonPreProcessor : IRequestPreProcessor<CreatePerson>
@@ -27,8 +40,7 @@ namespace StargateAPI.Business.Commands
 
             if (nameTaken)
             {
-                throw new BadHttpRequestException(
-                    $"A person named '{request.Name}' already exists.", StatusCodes.Status409Conflict);
+                throw new ConflictException($"A person named '{request.Name}' already exists.");
             }
         }
     }

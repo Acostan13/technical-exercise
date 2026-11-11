@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
+using StargateAPI.Business.Exceptions;
 using StargateAPI.Tests.Infrastructure;
 
 namespace StargateAPI.Tests.Commands;
@@ -108,10 +108,8 @@ public class CreateAstronautDutyTests : IDisposable
     [Fact]
     public async Task Duty_ForUnknownPerson_IsRejectedAsNotFound()
     {
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<NotFoundException>(
             () => _host.AddDutyAsync("Nobody", "1LT", "Commander", FirstStart));
-
-        Assert.Equal(StatusCodes.Status404NotFound, ex.StatusCode);
     }
 
     [Fact]
@@ -119,10 +117,8 @@ public class CreateAstronautDutyTests : IDisposable
     {
         await _host.AddDutyAsync(Name, "1LT", "Commander", FirstStart);
 
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<ConflictException>(
             () => _host.AddDutyAsync(Name, "1LT", "Commander", FirstStart));
-
-        Assert.Equal(StatusCodes.Status409Conflict, ex.StatusCode);
     }
 
     [Theory]
@@ -132,10 +128,9 @@ public class CreateAstronautDutyTests : IDisposable
     {
         await _host.AddDutyAsync(Name, "1LT", "Commander", SecondStart);
 
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<RequestValidationException>(
             () => _host.AddDutyAsync(Name, "CPT", "Pilot", SecondStart.AddDays(daysFromCurrentStart)));
 
-        Assert.Equal(StatusCodes.Status400BadRequest, ex.StatusCode);
         var (_, duties) = await LoadAsync();
         Assert.Null(Assert.Single(duties).DutyEndDate);
     }

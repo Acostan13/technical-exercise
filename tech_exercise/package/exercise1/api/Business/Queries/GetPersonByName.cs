@@ -1,14 +1,27 @@
-﻿using MediatR;
+﻿using FluentValidation;
+using MediatR;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
 using StargateAPI.Business.Dtos;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Queries
 {
     public class GetPersonByName : IRequest<GetPersonByNameResult>
     {
-        public required string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public required string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class GetPersonByNameValidator : AbstractValidator<GetPersonByName>
+    {
+        public GetPersonByNameValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class GetPersonByNameHandler : IRequestHandler<GetPersonByName, GetPersonByNameResult>
@@ -26,8 +39,7 @@ namespace StargateAPI.Business.Queries
                 .Where(z => z.Name == request.Name)
                 .Select(PersonAstronaut.Projection)
                 .FirstOrDefaultAsync(cancellationToken)
-                ?? throw new BadHttpRequestException(
-                    $"No person named '{request.Name}' was found.", StatusCodes.Status404NotFound);
+                ?? throw NotFoundException.Person(request.Name);
 
             return new GetPersonByNameResult()
             {

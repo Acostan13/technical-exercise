@@ -1,6 +1,6 @@
-using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Commands;
+using StargateAPI.Business.Exceptions;
 using StargateAPI.Tests.Infrastructure;
 
 namespace StargateAPI.Tests.Commands;
@@ -34,10 +34,9 @@ public class PersonCommandTests : IDisposable
         await _host.CreatePersonAsync("John Doe");
 
         // Before the fix, CreatePersonPreProcessor was never registered, so this check never ran.
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<ConflictException>(
             () => _host.CreatePersonAsync(duplicateName));
 
-        Assert.Equal(StatusCodes.Status409Conflict, ex.StatusCode);
         await using var context = _host.CreateContext();
         Assert.Equal(1, await context.People.CountAsync());
     }
@@ -68,10 +67,8 @@ public class PersonCommandTests : IDisposable
     [Fact]
     public async Task UpdatePerson_WhenPersonDoesNotExist_IsRejectedAsNotFound()
     {
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<NotFoundException>(
             () => _host.SendAsync(new UpdatePerson { CurrentName = "Nobody", Name = "Somebody" }));
-
-        Assert.Equal(StatusCodes.Status404NotFound, ex.StatusCode);
     }
 
     [Fact]
@@ -80,10 +77,8 @@ public class PersonCommandTests : IDisposable
         await _host.CreatePersonAsync("John Doe");
         await _host.CreatePersonAsync("Jane Doe");
 
-        var ex = await Assert.ThrowsAsync<BadHttpRequestException>(
+        await Assert.ThrowsAsync<ConflictException>(
             () => _host.SendAsync(new UpdatePerson { CurrentName = "Jane Doe", Name = "John Doe" }));
-
-        Assert.Equal(StatusCodes.Status409Conflict, ex.StatusCode);
     }
 
     public void Dispose() => _host.Dispose();
