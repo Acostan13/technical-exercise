@@ -1,0 +1,134 @@
+.back-link {
+  margin: -8px 0 12px -12px;
+}
+
+.skeleton__row--tall {
+  height: 120px;
+}
+
+.hero {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 24px;
+  padding: clamp(20px, 3vw, 32px);
+  margin-bottom: 20px;
+  border-radius: 24px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 85% 15%, rgba(142, 197, 255, 0.35), transparent 45%),
+    linear-gradient(120deg, #0b1d3a 0%, #13315c 60%, #1d4e89 100%);
+}
+
+.hero--retired {
+  background:
+    radial-gradient(circle at 85% 15%, rgba(255, 210, 150, 0.3), transparent 45%),
+    linear-gradient(120deg, #2b1a07 0%, #4e3110 60%, #7a4c17 100%);
+}
+
+.hero--civilian {
+  background: linear-gradient(120deg, #2a3442 0%, #3d4a5c 100%);
+}
+
+.hero__identity {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  font: var(--mat-sys-headline-medium);
+  background: rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+}
+
+.hero__name {
+  margin: 0 0 6px;
+  font: var(--mat-sys-headline-medium);
+}
+
+.hero__actions {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  --mat-button-outlined-label-text-color: #fff;
+  --mat-button-outlined-outline-color: rgba(255, 255, 255, 0.5);
+  --mat-button-filled-container-color: #fff;
+  --mat-button-filled-label-text-color: #0b1d3a;
+}
+
+.facts {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.fact dt {
+  font: var(--mat-sys-label-medium);
+  opacity: 0.72;
+}
+
+.fact dd {
+  margin: 4px 0 0;
+  font: var(--mat-sys-title-medium);
+}
+
+.result {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px 16px 16px 20px;
+  margin-bottom: 20px;
+  border-radius: 16px;
+  background: #e3f6ec;
+  color: #0f3d26;
+  border: 1px solid #b5e3c8;
+}
+
+.result__icon {
+  color: #146c43;
+}
+
+.result__body {
+  flex: 1;
+
+  ul {
+    margin: 6px 0 0;
+    padding-left: 18px;
+  }
+}
+
+.result__title {
+  margin: 0;
+  font: var(--mat-sys-title-small);
+}
+
+.history-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.history-title {
+  margin: 0;
+  font: var(--mat-sys-title-large);
+}
+
+.history-count {
+  color: var(--mat-sys-on-surface-variant);
+}
+
+@media (max-width: 640px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}

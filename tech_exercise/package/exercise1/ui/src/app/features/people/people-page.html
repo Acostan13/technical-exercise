@@ -1,0 +1,120 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-title">Personnel</h1>
+    <p class="page-subtitle">Everyone tracked by ACTS, with their current astronaut assignment.</p>
+  </div>
+  <button mat-flat-button (click)="addPerson()">
+    <mat-icon>person_add</mat-icon>
+    Add person
+  </button>
+</header>
+
+<section class="stats" aria-label="Summary">
+  @for (stat of stats(); track stat.label) {
+    <div [class]="'stat stat--' + stat.tone">
+      <mat-icon class="stat__icon" aria-hidden="true">{{ stat.icon }}</mat-icon>
+      <div>
+        <div class="stat__value">{{ loading() ? '–' : stat.value }}</div>
+        <div class="stat__label">{{ stat.label }}</div>
+      </div>
+    </div>
+  }
+</section>
+
+<section class="panel">
+  <div class="filters">
+    <mat-form-field appearance="outline" class="search" subscriptSizing="dynamic">
+      <mat-icon matPrefix>search</mat-icon>
+      <mat-label>Search by name, rank or duty</mat-label>
+      <input matInput type="search" [value]="search()" (input)="onSearch($event)" />
+    </mat-form-field>
+
+    <mat-chip-listbox
+      aria-label="Filter by status"
+      [value]="statusFilter()"
+      (change)="onStatusFilter($event.value)"
+      hideSingleSelectionIndicator
+    >
+      <mat-chip-option value="all">All</mat-chip-option>
+      <mat-chip-option value="active">Active</mat-chip-option>
+      <mat-chip-option value="retired">Retired</mat-chip-option>
+      <mat-chip-option value="civilian">No assignments</mat-chip-option>
+    </mat-chip-listbox>
+  </div>
+
+  @if (loading()) {
+    <div class="skeleton" aria-busy="true" aria-label="Loading personnel">
+      @for (row of [1, 2, 3, 4, 5]; track row) {
+        <div class="skeleton__row"></div>
+      }
+    </div>
+  } @else if (error(); as error) {
+    <div class="state state--error" role="alert">
+      <mat-icon>cloud_off</mat-icon>
+      <h2>Couldn't load personnel</h2>
+      <p>{{ error.message }}</p>
+      <button mat-stroked-button (click)="load()"><mat-icon>refresh</mat-icon> Try again</button>
+    </div>
+  } @else if (people().length === 0) {
+    <div class="state">
+      <mat-icon>person_search</mat-icon>
+      <h2>No personnel yet</h2>
+      <p>Add the first person to start tracking astronaut careers.</p>
+      <button mat-flat-button (click)="addPerson()">
+        <mat-icon>person_add</mat-icon> Add person
+      </button>
+    </div>
+  } @else {
+    <div class="table-wrapper">
+      <table mat-table [dataSource]="filtered()" class="people-table">
+        <ng-container matColumnDef="name">
+          <th mat-header-cell *matHeaderCellDef>Name</th>
+          <td mat-cell *matCellDef="let person">
+            <a class="person-link" [routerLink]="['/people', person.name]">{{ person.name }}</a>
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="status">
+          <th mat-header-cell *matHeaderCellDef>Status</th>
+          <td mat-cell *matCellDef="let person"><app-status-badge [status]="person.status" /></td>
+        </ng-container>
+
+        <ng-container matColumnDef="rank">
+          <th mat-header-cell *matHeaderCellDef>Current rank</th>
+          <td mat-cell *matCellDef="let person">{{ person.currentRank ?? '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="title">
+          <th mat-header-cell *matHeaderCellDef>Current duty</th>
+          <td mat-cell *matCellDef="let person">{{ person.currentDutyTitle ?? '—' }}</td>
+        </ng-container>
+
+        <ng-container matColumnDef="careerStart">
+          <th mat-header-cell *matHeaderCellDef>Career start</th>
+          <td mat-cell *matCellDef="let person">
+            {{ person.careerStart ? (person.careerStart | date: 'mediumDate') : '—' }}
+          </td>
+        </ng-container>
+
+        <ng-container matColumnDef="careerEnd">
+          <th mat-header-cell *matHeaderCellDef>Career end</th>
+          <td mat-cell *matCellDef="let person">
+            {{ person.careerEnd ? (person.careerEnd | date: 'mediumDate') : '—' }}
+          </td>
+        </ng-container>
+
+        <tr mat-header-row *matHeaderRowDef="columns"></tr>
+        <tr
+          mat-row
+          *matRowDef="let row; columns: columns"
+          class="people-row"
+          [routerLink]="['/people', row.name]"
+        ></tr>
+
+        <tr class="mat-row" *matNoDataRow>
+          <td class="no-match" [attr.colspan]="columns.length">No personnel match your filters.</td>
+        </tr>
+      </table>
+    </div>
+  }
+</section>
