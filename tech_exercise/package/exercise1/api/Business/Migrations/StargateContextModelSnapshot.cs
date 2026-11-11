@@ -73,7 +73,12 @@ namespace StargateAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PersonId");
+                    b.HasIndex(new[] { "PersonId" }, "IX_AstronautDuty_PersonId_Current")
+                        .IsUnique()
+                        .HasFilter("\"DutyEndDate\" IS NULL");
+
+                    b.HasIndex(new[] { "PersonId", "DutyStartDate" }, "IX_AstronautDuty_PersonId_DutyStartDate")
+                        .IsUnique();
 
                     b.ToTable("AstronautDuty");
                 });
@@ -86,7 +91,8 @@ namespace StargateAPI.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
 
                     b.HasKey("Id");
 

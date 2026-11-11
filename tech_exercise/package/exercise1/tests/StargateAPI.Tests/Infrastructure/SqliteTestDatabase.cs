@@ -6,22 +6,22 @@ namespace StargateAPI.Tests.Infrastructure;
 
 /// <summary>
 /// Provides an isolated, in-memory SQLite database per test with the real migrations applied.
-/// SQLite is used instead of the EF InMemory provider so that raw SQL, constraints and
-/// unique indexes behave exactly as they do in the running application.
+/// SQLite is used instead of the EF InMemory provider so that constraints, unique indexes, collations
+/// and transactions behave exactly as they do in the running application.
 /// </summary>
 public sealed class SqliteTestDatabase : IDisposable
 {
-    private readonly SqliteConnection _connection;
-
     public SqliteTestDatabase()
     {
         // The in-memory database lives only as long as this connection stays open.
-        _connection = new SqliteConnection("DataSource=:memory:");
-        _connection.Open();
+        Connection = new SqliteConnection("DataSource=:memory:");
+        Connection.Open();
 
         using var context = CreateContext();
         context.Database.Migrate();
     }
+
+    public SqliteConnection Connection { get; }
 
     /// <summary>
     /// Creates a new context over the shared connection. Use separate contexts for
@@ -30,11 +30,11 @@ public sealed class SqliteTestDatabase : IDisposable
     public StargateContext CreateContext()
     {
         var options = new DbContextOptionsBuilder<StargateContext>()
-            .UseSqlite(_connection)
+            .UseSqlite(Connection)
             .Options;
 
         return new StargateContext(options);
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() => Connection.Dispose();
 }

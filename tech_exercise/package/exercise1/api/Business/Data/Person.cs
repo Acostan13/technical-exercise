@@ -23,7 +23,9 @@ namespace StargateAPI.Business.Data
         {
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Id).ValueGeneratedOnAdd();
-            // Rule: a Person is uniquely identified by their Name.
+            // Rule: a Person is uniquely identified by their Name. NOCASE collation makes both the
+            // unique index and name lookups case-insensitive, so "john doe" cannot duplicate "John Doe".
+            builder.Property(x => x.Name).UseCollation("NOCASE");
             builder.HasIndex(x => x.Name).IsUnique();
             builder.HasOne(z => z.AstronautDetail).WithOne(z => z.Person).HasForeignKey<AstronautDetail>(z => z.PersonId);
             builder.HasMany(z => z.AstronautDuties).WithOne(z => z.Person).HasForeignKey(z => z.PersonId);
