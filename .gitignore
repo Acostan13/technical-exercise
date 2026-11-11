@@ -13,3 +13,7 @@ obj/
 node_modules/
 dist/
 .angular/
+
+# Test output
+TestResults/
+coverage/

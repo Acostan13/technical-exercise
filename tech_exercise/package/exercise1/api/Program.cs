@@ -21,6 +21,12 @@ builder.Services.AddMediatR(cfg =>
 
 var app = builder.Build();
 
+// Create the database and apply any pending migrations so the API is runnable from a clean checkout.
+using (var scope = app.Services.CreateScope())
+{
+    scope.ServiceProvider.GetRequiredService<StargateContext>().Database.Migrate();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
