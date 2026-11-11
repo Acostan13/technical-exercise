@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main, 'feature/**']
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    working-directory: tech_exercise/package/exercise1
+
+jobs:
+  api:
+    name: API · build, test, coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore
+        run: |
+          dotnet restore StargateAPI.sln
+          dotnet tool restore
+
+      - name: Build (warnings as errors)
+        run: dotnet build StargateAPI.sln --configuration Release --no-restore -warnaserror
+
+      - name: Verify migrations match the model
+        run: dotnet ef migrations has-pending-model-changes --project api --configuration Release --no-build
+
+      - name: Test with coverage
+        run: >
+          dotnet test StargateAPI.sln --configuration Release --no-build
+          --settings coverage.runsettings --results-directory TestResults
+          --logger "trx;LogFileName=results.trx"
+
+      - name: Coverage report
+        if: always()
+        run: |
+          dotnet reportgenerator -reports:"TestResults/*/coverage.cobertura.xml" -targetdir:coverage \
+            -reporttypes:"Html;MarkdownSummaryGithub"
+          cat coverage/SummaryGithub.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload test results and coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-test-results
+          path: |
+            tech_exercise/package/exercise1/TestResults
+            tech_exercise/package/exercise1/coverage
+
+  ui:
+    name: UI · test, build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tech_exercise/package/exercise1/ui
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tech_exercise/package/exercise1/ui/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Check formatting
+        run: npx prettier --check "src/**/*.{ts,html,scss}"
+
+      - name: Unit tests
+        run: npm test -- --watch=false
+
+      - name: Production build
+        run: npm run build

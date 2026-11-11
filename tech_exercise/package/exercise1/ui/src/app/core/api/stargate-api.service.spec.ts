@@ -89,17 +89,15 @@ describe('StargateApiService', () => {
   it('normalises API errors, keeping the validation messages', async () => {
     const result = firstValueFrom(api.createPerson(''));
 
-    http
-      .expectOne('/api/Person')
-      .flush(
-        {
-          success: false,
-          message: 'Name is required.',
-          responseCode: 400,
-          errors: ['Name is required.'],
-        },
-        { status: 400, statusText: 'Bad Request' },
-      );
+    http.expectOne('/api/Person').flush(
+      {
+        success: false,
+        message: 'Name is required.',
+        responseCode: 400,
+        errors: ['Name is required.'],
+      },
+      { status: 400, statusText: 'Bad Request' },
+    );
 
     const error = await result.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
