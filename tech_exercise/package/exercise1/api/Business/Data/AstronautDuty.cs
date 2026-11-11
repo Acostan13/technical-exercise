@@ -19,7 +19,7 @@ namespace StargateAPI.Business.Data
 
         public DateTime? DutyEndDate { get; set; }
 
-        public virtual Person Person { get; set; }
+        public virtual Person Person { get; set; } = null!;
     }
 
     public class AstronautDutyConfiguration : IEntityTypeConfiguration<AstronautDuty>
@@ -28,6 +28,16 @@ namespace StargateAPI.Business.Data
         {
             builder.HasKey(x => x.Id);
             builder.Property(x => x.Id).ValueGeneratedOnAdd();
+
+            // Rules: a Person holds only one current duty at a time, and the current duty has no end date.
+            // Enforced in the database so concurrent requests cannot create two open-ended duties.
+            builder.HasIndex(x => x.PersonId, "IX_AstronautDuty_PersonId_Current")
+                .IsUnique()
+                .HasFilter("\"DutyEndDate\" IS NULL");
+
+            // A Person cannot start two duties on the same day.
+            builder.HasIndex(x => new { x.PersonId, x.DutyStartDate }, "IX_AstronautDuty_PersonId_DutyStartDate")
+                .IsUnique();
         }
     }
 }

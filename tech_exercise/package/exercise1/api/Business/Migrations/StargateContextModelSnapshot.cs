@@ -15,7 +15,7 @@ namespace StargateAPI.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "7.0.15");
+            modelBuilder.HasAnnotation("ProductVersion", "8.0.4");
 
             modelBuilder.Entity("StargateAPI.Business.Data.AstronautDetail", b =>
                 {
@@ -26,7 +26,7 @@ namespace StargateAPI.Migrations
                     b.Property<DateTime?>("CareerEndDate")
                         .HasColumnType("TEXT");
 
-                    b.Property<DateTime?>("CareerStartDate")
+                    b.Property<DateTime>("CareerStartDate")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CurrentDutyTitle")
@@ -73,7 +73,12 @@ namespace StargateAPI.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PersonId");
+                    b.HasIndex(new[] { "PersonId" }, "IX_AstronautDuty_PersonId_Current")
+                        .IsUnique()
+                        .HasFilter("\"DutyEndDate\" IS NULL");
+
+                    b.HasIndex(new[] { "PersonId", "DutyStartDate" }, "IX_AstronautDuty_PersonId_DutyStartDate")
+                        .IsUnique();
 
                     b.ToTable("AstronautDuty");
                 });
@@ -86,11 +91,60 @@ namespace StargateAPI.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT")
+                        .UseCollation("NOCASE");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name")
+                        .IsUnique();
+
+                    b.ToTable("Person");
+                });
+
+            modelBuilder.Entity("StargateAPI.Business.Data.ProcessLog", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("DurationMs")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ExceptionDetail")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ExceptionType")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Level")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestData")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RequestName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Succeeded")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("TimestampUtc")
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Person");
+                    b.HasIndex("TimestampUtc");
+
+                    b.ToTable("ProcessLog");
                 });
 
             modelBuilder.Entity("StargateAPI.Business.Data.AstronautDetail", b =>

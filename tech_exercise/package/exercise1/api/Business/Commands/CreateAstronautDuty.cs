@@ -1,24 +1,46 @@
-﻿using Dapper;
+﻿using FluentValidation;
 using MediatR;
 using MediatR.Pipeline;
 using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
-using StargateAPI.Controllers;
-using System.Net;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Rules;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Commands
 {
     public class CreateAstronautDuty : IRequest<CreateAstronautDutyResult>
     {
-        public required string Name { get; set; }
+        private string _name = string.Empty;
+        private string _rank = string.Empty;
+        private string _dutyTitle = string.Empty;
 
-        public required string Rank { get; set; }
+        public string Name { get => _name; set => _name = Normalize.Text(value); }
 
-        public required string DutyTitle { get; set; }
+        public string Rank { get => _rank; set => _rank = Normalize.Text(value); }
+
+        public string DutyTitle { get => _dutyTitle; set => _dutyTitle = Normalize.Text(value); }
 
         public DateTime DutyStartDate { get; set; }
     }
 
+    public class CreateAstronautDutyValidator : AbstractValidator<CreateAstronautDuty>
+    {
+        public CreateAstronautDutyValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+            RuleFor(x => x.Rank).ValidRank();
+            RuleFor(x => x.DutyTitle).ValidDutyTitle();
+
+            // An omitted date deserializes to DateTime.MinValue; reject it rather than store 0001-01-01.
+            RuleFor(x => x.DutyStartDate).NotEqual(default(DateTime)).WithMessage("Duty Start Date is required.");
+        }
+    }
+
+    /// <summary>
+    /// Verifies the request is consistent with the Person's existing duty history before it is handled.
+    /// </summary>
     public class CreateAstronautDutyPreProcessor : IRequestPreProcessor<CreateAstronautDuty>
     {
         private readonly StargateContext _context;
@@ -28,17 +50,50 @@ namespace StargateAPI.Business.Commands
             _context = context;
         }
 
-        public Task Process(CreateAstronautDuty request, CancellationToken cancellationToken)
+        public async Task Process(CreateAstronautDuty request, CancellationToken cancellationToken)
         {
-            var person = _context.People.AsNoTracking().FirstOrDefault(z => z.Name == request.Name);
+            var person = await _context.People.AsNoTracking()
+                .FirstOrDefaultAsync(z => z.Name == request.Name, cancellationToken)
+                ?? throw NotFoundException.Person(request.Name);
 
-            if (person is null) throw new BadHttpRequestException("Bad Request");
+            var dutyStartDate = request.DutyStartDate.Date;
 
-            var verifyNoPreviousDuty = _context.AstronautDuties.FirstOrDefault(z => z.DutyTitle == request.DutyTitle && z.DutyStartDate == request.DutyStartDate);
+            // Scoped to this Person: other people may legitimately hold the same title on the same date.
+            var isDuplicate = await _context.AstronautDuties.AsNoTracking()
+                .AnyAsync(z => z.PersonId == person.Id
+                               && z.DutyTitle == request.DutyTitle
+                               && z.DutyStartDate == dutyStartDate, cancellationToken);
 
-            if (verifyNoPreviousDuty is not null) throw new BadHttpRequestException("Bad Request");
+            if (isDuplicate)
+            {
+                throw new ConflictException(
+                    $"'{request.Name}' already has a '{request.DutyTitle}' duty starting {dutyStartDate:yyyy-MM-dd}.");
+            }
 
-            return Task.CompletedTask;
+            await DutyHistory.EnsureStartsAfterLatestDutyAsync(_context, person.Id, dutyStartDate, cancellationToken);
+        }
+    }
+
+    internal static class DutyHistory
+    {
+        /// <summary>
+        /// The previous duty ends the day before the new one starts, so a new duty must start after the
+        /// Person's latest duty. Otherwise the previous duty would end before it began.
+        /// </summary>
+        public static async Task EnsureStartsAfterLatestDutyAsync(
+            StargateContext context, int personId, DateTime dutyStartDate, CancellationToken cancellationToken)
+        {
+            var latestDutyStartDate = await context.AstronautDuties.AsNoTracking()
+                .Where(z => z.PersonId == personId)
+                .OrderByDescending(z => z.DutyStartDate)
+                .Select(z => (DateTime?)z.DutyStartDate)
+                .FirstOrDefaultAsync(cancellationToken);
+
+            if (latestDutyStartDate is not null && dutyStartDate <= latestDutyStartDate.Value)
+            {
+                throw new RequestValidationException(
+                    $"Duty Start Date must be after the current duty start date ({latestDutyStartDate:yyyy-MM-dd}).");
+            }
         }
     }
 
@@ -50,65 +105,75 @@ namespace StargateAPI.Business.Commands
         {
             _context = context;
         }
+
         public async Task<CreateAstronautDutyResult> Handle(CreateAstronautDuty request, CancellationToken cancellationToken)
         {
+            var person = await _context.People
+                .Include(z => z.AstronautDetail)
+                .FirstOrDefaultAsync(z => z.Name == request.Name, cancellationToken)
+                ?? throw NotFoundException.Person(request.Name);
 
-            var query = $"SELECT * FROM [Person] WHERE \'{request.Name}\' = Name";
+            var dutyStartDate = request.DutyStartDate.Date;
+            var isRetirement = DutyTitles.IsRetired(request.DutyTitle);
+            var dutyTitle = isRetirement ? DutyTitles.Retired : request.DutyTitle;
 
-            var person = await _context.Connection.QueryFirstOrDefaultAsync<Person>(query);
+            // Rule: the Previous Duty End Date is the day before the New Astronaut Duty Start Date.
+            // Closing the previous duty and opening the new one happen in one transaction; they are saved
+            // in two steps so the "one current duty per person" index is never violated mid-statement.
+            await using var transaction = await _context.Database.BeginTransactionAsync(cancellationToken);
 
-            query = $"SELECT * FROM [AstronautDetail] WHERE {person.Id} = PersonId";
+            // Re-checked inside the transaction (SQLite BEGIN IMMEDIATE: holds the write lock). The pre-processor
+            // check runs before the lock is taken, so a concurrent request may have added a later duty since.
+            await DutyHistory.EnsureStartsAfterLatestDutyAsync(_context, person.Id, dutyStartDate, cancellationToken);
 
-            var astronautDetail = await _context.Connection.QueryFirstOrDefaultAsync<AstronautDetail>(query);
+            var currentDuty = await _context.AstronautDuties
+                .Where(z => z.PersonId == person.Id && z.DutyEndDate == null)
+                .OrderByDescending(z => z.DutyStartDate)
+                .FirstOrDefaultAsync(cancellationToken);
 
-            if (astronautDetail == null)
+            if (currentDuty is not null)
             {
-                astronautDetail = new AstronautDetail();
-                astronautDetail.PersonId = person.Id;
-                astronautDetail.CurrentDutyTitle = request.DutyTitle;
-                astronautDetail.CurrentRank = request.Rank;
-                astronautDetail.CareerStartDate = request.DutyStartDate.Date;
-                if (request.DutyTitle == "RETIRED")
-                {
-                    astronautDetail.CareerEndDate = request.DutyStartDate.Date;
-                }
-
-                await _context.AstronautDetails.AddAsync(astronautDetail);
-
-            }
-            else
-            {
-                astronautDetail.CurrentDutyTitle = request.DutyTitle;
-                astronautDetail.CurrentRank = request.Rank;
-                if (request.DutyTitle == "RETIRED")
-                {
-                    astronautDetail.CareerEndDate = request.DutyStartDate.AddDays(-1).Date;
-                }
-                _context.AstronautDetails.Update(astronautDetail);
+                currentDuty.DutyEndDate = dutyStartDate.AddDays(-1);
+                await _context.SaveChangesAsync(cancellationToken);
             }
 
-            query = $"SELECT * FROM [AstronautDuty] WHERE {person.Id} = PersonId Order By DutyStartDate Desc";
-
-            var astronautDuty = await _context.Connection.QueryFirstOrDefaultAsync<AstronautDuty>(query);
-
-            if (astronautDuty != null)
-            {
-                astronautDuty.DutyEndDate = request.DutyStartDate.AddDays(-1).Date;
-                _context.AstronautDuties.Update(astronautDuty);
-            }
-
+            // Rule: a Person's Current Duty has no Duty End Date.
             var newAstronautDuty = new AstronautDuty()
             {
                 PersonId = person.Id,
                 Rank = request.Rank,
-                DutyTitle = request.DutyTitle,
-                DutyStartDate = request.DutyStartDate.Date,
+                DutyTitle = dutyTitle,
+                DutyStartDate = dutyStartDate,
                 DutyEndDate = null
             };
 
-            await _context.AstronautDuties.AddAsync(newAstronautDuty);
+            await _context.AstronautDuties.AddAsync(newAstronautDuty, cancellationToken);
 
-            await _context.SaveChangesAsync();
+            // Rule: a Person's current astronaut information is stored in the Astronaut Detail table,
+            // and they only ever hold one current Duty Title, Start Date and Rank at a time.
+            var astronautDetail = person.AstronautDetail;
+
+            if (astronautDetail is null)
+            {
+                astronautDetail = new AstronautDetail()
+                {
+                    PersonId = person.Id,
+                    CareerStartDate = dutyStartDate
+                };
+
+                await _context.AstronautDetails.AddAsync(astronautDetail, cancellationToken);
+            }
+
+            astronautDetail.CurrentDutyTitle = dutyTitle;
+            astronautDetail.CurrentRank = request.Rank;
+
+            // Rule: a Person's Career End Date is one day before the Retired Duty Start Date.
+            // A non-retirement duty clears it, keeping Astronaut Detail consistent with the current duty.
+            astronautDetail.CareerEndDate = isRetirement ? dutyStartDate.AddDays(-1) : null;
+
+            await _context.SaveChangesAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
 
             return new CreateAstronautDutyResult()
             {

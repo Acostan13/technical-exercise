@@ -1,19 +1,33 @@
-﻿using Dapper;
+﻿using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
 using StargateAPI.Business.Dtos;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Queries
 {
     public class GetPersonByName : IRequest<GetPersonByNameResult>
     {
-        public required string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public required string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class GetPersonByNameValidator : AbstractValidator<GetPersonByName>
+    {
+        public GetPersonByNameValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class GetPersonByNameHandler : IRequestHandler<GetPersonByName, GetPersonByNameResult>
     {
         private readonly StargateContext _context;
+
         public GetPersonByNameHandler(StargateContext context)
         {
             _context = context;
@@ -21,15 +35,16 @@ namespace StargateAPI.Business.Queries
 
         public async Task<GetPersonByNameResult> Handle(GetPersonByName request, CancellationToken cancellationToken)
         {
-            var result = new GetPersonByNameResult();
+            var person = await _context.People.AsNoTracking()
+                .Where(z => z.Name == request.Name)
+                .Select(PersonAstronaut.Projection)
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? throw NotFoundException.Person(request.Name);
 
-            var query = $"SELECT a.Id as PersonId, a.Name, b.CurrentRank, b.CurrentDutyTitle, b.CareerStartDate, b.CareerEndDate FROM [Person] a LEFT JOIN [AstronautDetail] b on b.PersonId = a.Id WHERE '{request.Name}' = a.Name";
-
-            var person = await _context.Connection.QueryAsync<PersonAstronaut>(query);
-
-            result.Person = person.FirstOrDefault();
-
-            return result;
+            return new GetPersonByNameResult()
+            {
+                Person = person
+            };
         }
     }
 

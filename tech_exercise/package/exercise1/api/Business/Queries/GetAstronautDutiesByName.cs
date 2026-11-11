@@ -1,14 +1,27 @@
-﻿using Dapper;
+﻿using FluentValidation;
 using MediatR;
+using Microsoft.EntityFrameworkCore;
 using StargateAPI.Business.Data;
 using StargateAPI.Business.Dtos;
-using StargateAPI.Controllers;
+using StargateAPI.Business.Exceptions;
+using StargateAPI.Business.Responses;
+using StargateAPI.Business.Validation;
 
 namespace StargateAPI.Business.Queries
 {
     public class GetAstronautDutiesByName : IRequest<GetAstronautDutiesByNameResult>
     {
-        public string Name { get; set; } = string.Empty;
+        private string _name = string.Empty;
+
+        public required string Name { get => _name; set => _name = Normalize.Text(value); }
+    }
+
+    public class GetAstronautDutiesByNameValidator : AbstractValidator<GetAstronautDutiesByName>
+    {
+        public GetAstronautDutiesByNameValidator()
+        {
+            RuleFor(x => x.Name).ValidPersonName();
+        }
     }
 
     public class GetAstronautDutiesByNameHandler : IRequestHandler<GetAstronautDutiesByName, GetAstronautDutiesByNameResult>
@@ -22,29 +35,31 @@ namespace StargateAPI.Business.Queries
 
         public async Task<GetAstronautDutiesByNameResult> Handle(GetAstronautDutiesByName request, CancellationToken cancellationToken)
         {
+            var person = await _context.People.AsNoTracking()
+                .Where(z => z.Name == request.Name)
+                .Select(PersonAstronaut.Projection)
+                .FirstOrDefaultAsync(cancellationToken)
+                ?? throw NotFoundException.Person(request.Name);
 
-            var result = new GetAstronautDutiesByNameResult();
+            // A Person with no astronaut assignments returns an empty list rather than an error.
+            var duties = await _context.AstronautDuties.AsNoTracking()
+                .Where(z => z.PersonId == person.PersonId)
+                .OrderByDescending(z => z.DutyStartDate)
+                .Select(AstronautDutyDto.Projection)
+                .ToListAsync(cancellationToken);
 
-            var query = $"SELECT a.Id as PersonId, a.Name, b.CurrentRank, b.CurrentDutyTitle, b.CareerStartDate, b.CareerEndDate FROM [Person] a LEFT JOIN [AstronautDetail] b on b.PersonId = a.Id WHERE \'{request.Name}\' = a.Name";
-
-            var person = await _context.Connection.QueryFirstOrDefaultAsync<PersonAstronaut>(query);
-
-            result.Person = person;
-
-            query = $"SELECT * FROM [AstronautDuty] WHERE {person.PersonId} = PersonId Order By DutyStartDate Desc";
-
-            var duties = await _context.Connection.QueryAsync<AstronautDuty>(query);
-
-            result.AstronautDuties = duties.ToList();
-
-            return result;
-
+            return new GetAstronautDutiesByNameResult()
+            {
+                Person = person,
+                AstronautDuties = duties
+            };
         }
     }
 
     public class GetAstronautDutiesByNameResult : BaseResponse
     {
-        public PersonAstronaut Person { get; set; }
-        public List<AstronautDuty> AstronautDuties { get; set; } = new List<AstronautDuty>();
+        public PersonAstronaut? Person { get; set; }
+
+        public List<AstronautDutyDto> AstronautDuties { get; set; } = new List<AstronautDutyDto>();
     }
 }
