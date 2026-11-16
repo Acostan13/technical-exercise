@@ -1,0 +1,111 @@
+<header class="page-header">
+  <div>
+    <h1 class="page-title">Activity</h1>
+    <p class="page-subtitle">
+      The outcome of every process the Stargate API has run, newest first.
+    </p>
+  </div>
+
+  <div class="header-actions">
+    <mat-slide-toggle
+      [checked]="changesOnly()"
+      (change)="changesOnly.set($event.checked)"
+      matTooltip="Hide lookups such as page views"
+    >
+      Changes only
+    </mat-slide-toggle>
+    <mat-slide-toggle [checked]="live()" (change)="setLive($event.checked)"
+      >Live updates</mat-slide-toggle
+    >
+    <button mat-stroked-button (click)="refresh()" [disabled]="loading()">
+      <mat-icon>refresh</mat-icon> Refresh
+    </button>
+  </div>
+</header>
+
+<section class="panel">
+  <mat-button-toggle-group
+    class="levels"
+    aria-label="Filter by outcome"
+    [value]="levelFilter()"
+    (change)="levelFilter.set($event.value)"
+    hideSingleSelectionIndicator
+  >
+    <mat-button-toggle value="all">All · {{ visible().length }}</mat-button-toggle>
+    <mat-button-toggle value="Information"
+      >Succeeded · {{ counts().Information }}</mat-button-toggle
+    >
+    <mat-button-toggle value="Warning">Rejected · {{ counts().Warning }}</mat-button-toggle>
+    <mat-button-toggle value="Error">Errors · {{ counts().Error }}</mat-button-toggle>
+  </mat-button-toggle-group>
+
+  @if (loading()) {
+    <div class="skeleton" aria-busy="true" aria-label="Loading activity">
+      @for (row of [1, 2, 3, 4, 5, 6]; track row) {
+        <div class="skeleton__row"></div>
+      }
+    </div>
+  } @else if (error(); as error) {
+    <div class="state state--error" role="alert">
+      <mat-icon>cloud_off</mat-icon>
+      <h2>Couldn't load activity</h2>
+      <p>{{ error.message }}</p>
+      <button mat-stroked-button (click)="refresh()"><mat-icon>refresh</mat-icon> Try again</button>
+    </div>
+  } @else if (filtered().length === 0) {
+    <div class="state">
+      <mat-icon>history</mat-icon>
+      <h2>No activity{{ levelFilter() === 'all' ? ' yet' : ' for this filter' }}</h2>
+      <p>Processes appear here as people and duties are added, updated and retrieved.</p>
+    </div>
+  } @else {
+    <ol class="log-list">
+      @for (log of filtered(); track log.id) {
+        <li class="log" [class]="'log log--' + log.level.toLowerCase()">
+          <mat-icon class="log__icon" [attr.aria-label]="log.level">{{
+            levelIcons[log.level]
+          }}</mat-icon>
+
+          <div class="log__main">
+            <div class="log__headline">
+              <span class="log__process">{{ processName(log.requestName) }}</span>
+              <span class="log__message">{{ outcome(log) }}</span>
+            </div>
+
+            @if (log.requestData || log.exceptionDetail) {
+              <details class="log__details">
+                <summary>Details</summary>
+                @if (log.requestData) {
+                  <h3>Request</h3>
+                  <pre>{{ formatRequest(log.requestData) }}</pre>
+                }
+                @if (log.exceptionDetail && log.level === 'Error') {
+                  <h3>{{ log.exceptionType }}</h3>
+                  <pre>{{ log.exceptionDetail }}</pre>
+                }
+              </details>
+            }
+          </div>
+
+          <div class="log__meta">
+            <time
+              [attr.datetime]="log.timestampUtc"
+              [matTooltip]="(log.timestampUtc | date: 'medium') ?? ''"
+            >
+              {{ log.timestampUtc | date: 'MMM d, h:mm:ss a' }}
+            </time>
+            <span class="log__duration">{{ log.durationMs | number }} ms</span>
+          </div>
+        </li>
+      }
+    </ol>
+
+    @if (canLoadMore()) {
+      <div class="load-more">
+        <button mat-stroked-button (click)="loadMore()" [disabled]="loading()">
+          Load older entries
+        </button>
+      </div>
+    }
+  }
+</section>

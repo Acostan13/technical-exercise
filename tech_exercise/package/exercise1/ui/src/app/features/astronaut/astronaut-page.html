@@ -1,0 +1,130 @@
+<a mat-button routerLink="/people" class="back-link"> <mat-icon>arrow_back</mat-icon> Personnel </a>
+
+@switch (state().status) {
+  @case ('loading') {
+    <div class="panel" aria-busy="true" aria-label="Loading astronaut record">
+      <div class="skeleton">
+        <div class="skeleton__row skeleton__row--tall"></div>
+        <div class="skeleton__row"></div>
+        <div class="skeleton__row"></div>
+        <div class="skeleton__row"></div>
+      </div>
+    </div>
+  }
+
+  @case ('error') {
+    @if (loadError(); as error) {
+      <div class="panel">
+        @if (error.isNotFound) {
+          <div class="state">
+            <mat-icon>person_off</mat-icon>
+            <h2>No one named “{{ name() }}”</h2>
+            <p>They may have been renamed. Find them in the personnel list.</p>
+            <a mat-flat-button routerLink="/people">View personnel</a>
+          </div>
+        } @else {
+          <div class="state state--error" role="alert">
+            <mat-icon>cloud_off</mat-icon>
+            <h2>Couldn't load this record</h2>
+            <p>{{ error.message }}</p>
+            <button mat-stroked-button (click)="reload()">
+              <mat-icon>refresh</mat-icon> Try again
+            </button>
+          </div>
+        }
+      </div>
+    }
+  }
+
+  @case ('loaded') {
+    @if (record(); as record) {
+      @if (summary(); as summary) {
+        <section
+          class="hero"
+          [class]="'hero hero--' + summary.status"
+          aria-labelledby="person-name"
+        >
+          <div class="hero__identity">
+            <div class="avatar" aria-hidden="true">{{ record.person.name.charAt(0) }}</div>
+            <div>
+              <h1 id="person-name" class="hero__name">{{ record.person.name }}</h1>
+              <app-status-badge [status]="summary.status" />
+            </div>
+          </div>
+
+          <div class="hero__actions">
+            <button mat-stroked-button (click)="rename()" matTooltip="Update this person's name">
+              <mat-icon>edit</mat-icon> Update
+            </button>
+            <button mat-flat-button (click)="addDuty()"><mat-icon>add</mat-icon> Add duty</button>
+          </div>
+
+          <dl class="facts">
+            <div class="fact">
+              <dt>Current rank</dt>
+              <dd>{{ record.person.currentRank ?? '—' }}</dd>
+            </div>
+            <div class="fact">
+              <dt>Current duty</dt>
+              <dd>{{ record.person.currentDutyTitle ?? '—' }}</dd>
+            </div>
+            <div class="fact">
+              <dt>Career start</dt>
+              <dd>{{ summary.careerStart ? (summary.careerStart | date: 'mediumDate') : '—' }}</dd>
+            </div>
+            <div class="fact">
+              <dt>Career end</dt>
+              <dd>{{ summary.careerEnd ? (summary.careerEnd | date: 'mediumDate') : '—' }}</dd>
+            </div>
+            <div class="fact">
+              <dt>{{ summary.careerEnd ? 'Length of service' : 'Service to date' }}</dt>
+              <dd>{{ summary.service ?? '—' }}</dd>
+            </div>
+          </dl>
+        </section>
+      }
+
+      @if (lastResult(); as result) {
+        <section class="result" role="status" aria-live="polite">
+          <mat-icon class="result__icon" aria-hidden="true">task_alt</mat-icon>
+          <div class="result__body">
+            <h2 class="result__title">Duty added</h2>
+            <ul>
+              @for (change of result.changes; track change) {
+                <li>{{ change }}</li>
+              }
+            </ul>
+          </div>
+          <button mat-icon-button (click)="dismissResult()" aria-label="Dismiss">
+            <mat-icon>close</mat-icon>
+          </button>
+        </section>
+      }
+
+      <section class="panel" aria-labelledby="history-heading">
+        <div class="history-header">
+          <h2 id="history-heading" class="history-title">Duty history</h2>
+          <span class="history-count"
+            >{{ duties().length }} {{ duties().length === 1 ? 'assignment' : 'assignments' }}</span
+          >
+        </div>
+
+        @if (duties().length > 0) {
+          <app-duty-timeline [duties]="duties()" [highlightId]="lastResult()?.dutyId ?? null" />
+        } @else {
+          <div class="state">
+            <mat-icon>assignment_ind</mat-icon>
+            <h2>No astronaut assignments</h2>
+            <p>
+              {{ record.person.name }} has not had an astronaut assignment, so has no astronaut
+              records yet.
+            </p>
+            <button mat-flat-button (click)="addDuty()">
+              <mat-icon>add</mat-icon> Add first duty
+            </button>
+          </div>
+        }
+      </section>
+    }
+  }
+}

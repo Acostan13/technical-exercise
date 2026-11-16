@@ -1,0 +1,34 @@
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="app-header">
+  <mat-toolbar class="toolbar">
+    <a class="brand" routerLink="/people" aria-label="Stargate ACTS home">
+      <mat-icon class="brand__icon" aria-hidden="true">rocket_launch</mat-icon>
+      <span class="brand__text">
+        <span class="brand__name">Stargate</span>
+        <span class="brand__subtitle">Astronaut Career Tracking System</span>
+      </span>
+    </a>
+
+    <span class="spacer"></span>
+
+    <nav class="nav" aria-label="Main">
+      <a mat-button routerLink="/people" routerLinkActive="nav__link--active" class="nav__link">
+        <mat-icon>groups</mat-icon> Personnel
+      </a>
+      <a mat-button routerLink="/activity" routerLinkActive="nav__link--active" class="nav__link">
+        <mat-icon>monitor_heart</mat-icon> Activity
+      </a>
+    </nav>
+  </mat-toolbar>
+
+  <div class="progress" aria-live="polite">
+    @if (loading.isLoading()) {
+      <mat-progress-bar mode="indeterminate" aria-label="Loading" />
+    }
+  </div>
+</header>
+
+<main id="main" class="content" tabindex="-1">
+  <router-outlet />
+</main>
